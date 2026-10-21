@@ -18,13 +18,23 @@ Three parts work together:
 /plugin install focus@focus-mode
 ```
 
-To try it in one session without installing:
-
-```
-claude --plugin-dir /path/to/focus-mode --append-system-prompt "$(cat /path/to/focus-mode/prompts/focus-system.md)"
-```
+To try it without installing: `claude --plugin-dir /path/to/focus-mode`.
 
 The hooks run with `node` (v18 or later), so `node` must be on the machine.
+
+## Switch it on
+
+Installing changes nothing by itself: focus mode is **off** until you switch it on for a project.
+
+| Command | Effect |
+|---|---|
+| `/focus:on` | on for this project, right now, in the current session (and in every later session there) |
+| `/focus:off` | off for this project |
+| `/focus:status` | shows the mode, the gate and your levels |
+
+`/focus` on its own is a different command: Claude Code's built-in view toggle. Use `/focus:on`.
+
+The mode lives in `focus/state.json` (`"mode": "on"`). A launcher can force it for one session with the environment variable `FOCUS_MODE=on` (or `off`), which wins over the file.
 
 ## Use
 

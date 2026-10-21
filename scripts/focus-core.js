@@ -12,7 +12,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const DEFAULT_STATE = { gate: "on", level: {} };
+export const DEFAULT_STATE = { mode: "off", gate: "on", level: {} };
 export const LEVELS = { 1: "Guided", 2: "Paired", 3: "Led", 4: "Reviewed" };
 
 // Commands that produce a result the user should predict first.
@@ -42,7 +42,28 @@ const writeLines = (p, rows) => writeFileSync(p, rows.map((r) => JSON.stringify(
 const ensure = (cwd) => mkdirSync(dir(cwd), { recursive: true });
 
 export const loadState = (cwd) => ({ ...DEFAULT_STATE, ...readJson(join(dir(cwd), "state.json"), {}) });
-export const gateOn = (cwd) => loadState(cwd).gate !== "off";
+/**
+ * Is focus mode on here? The environment wins (FOCUS_MODE=on|off, set by a launcher), else focus/state.json's "mode".
+ * Off by default, so installing the plugin changes nothing until a project (or a session) opts in with /focus:on.
+ */
+export function modeOn(cwd, env = process.env) {
+  const e = String(env.FOCUS_MODE || "").toLowerCase();
+  if (e === "on") return true;
+  if (e === "off") return false;
+  return loadState(cwd).mode === "on";
+}
+export const gateOn = (cwd, env = process.env) => modeOn(cwd, env) && loadState(cwd).gate !== "off";
+
+/** Switch focus mode on or off for this project (persists for later sessions). */
+export function setMode(cwd, on) {
+  ensure(cwd);
+  const sp = join(dir(cwd), "state.json");
+  writeFileSync(sp, JSON.stringify({ ...loadState(cwd), mode: on ? "on" : "off" }, null, 2) + "\n");
+  if (on) init(cwd);
+}
+
+/** The few commands that switch modes are never held by the gate (turning focus off must not need a prediction). */
+export const CLI_RE = /^node\s+"?(?:[^;&|`$<>\n]|\$\{CLAUDE_PLUGIN_ROOT\})*focus-cli\.js"?\s+(?:on|off|status|gate\s+(?:on|off)|level\s+\S+\s+[1-4])\s*$/;
 
 /**
  * Parse the user's own message. Lines that start with a marker are records:
@@ -104,6 +125,7 @@ const WRITE_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
  */
 export function decide({ cwd, tool, input = {}, now = Date.now(), commit = true }) {
   if (!gateOn(cwd)) return { allow: true };
+  if (tool === "Bash" && CLI_RE.test(String(input.command || "").trim())) return { allow: true };
   const pf = join(dir(cwd), "predictions.jsonl"), tf = join(dir(cwd), "teachbacks.jsonl");
   if (tool === "Bash" && RUN_RE.test(String(input.command || ""))) {
     if (!(commit ? consumeOldest(pf, now, { cmd: String(input.command).slice(0, 200) }) : peekOpen(pf))) {
