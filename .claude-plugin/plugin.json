@@ -1,14 +1,14 @@
 {
-  "name": "tandem",
+  "name": "engineer",
   "version": "0.2.0",
-  "description": "Tandem mode: a two-way working session where the AI teaches and the user guides, with predictions, teach-backs and a ledger enforced by hooks.",
+  "description": "Engineer mode: a two-way working session where the AI teaches and the user guides, with predictions, teach-backs and a ledger enforced by hooks.",
   "author": {
     "name": "Ali Zareh"
   },
   "license": "MIT",
-  "repository": "https://github.com/AliZareh-CoE/tandem",
+  "repository": "https://github.com/AliZareh-CoE/engineer-mode",
   "keywords": [
-    "tandem",
+    "engineer",
     "learning",
     "research",
     "teach-back",

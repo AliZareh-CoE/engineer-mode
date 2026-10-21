@@ -1,4 +1,4 @@
-# Tandem
+# Engineer mode
 
 A working mode for [Claude Code](https://claude.com/claude-code) in which the AI teaches and you guide, as peers.
 It exists for one reason: to stop accepting output you do not understand ("vibe coding", "vibe research") and to keep you the person who decides.
@@ -9,32 +9,32 @@ Three parts work together:
 - **Hooks** enforce the habits in code, outside the model, so they hold on a long session:
   - A command that produces a result is held until **you** have sent a prediction.
   - An edit to a claim, protocol or paper file is held until **you** have explained the change in one sentence.
-- **Plain files** in `tandem/` record what you predicted, how it turned out, and what you explained, so you can read your own track record.
+- **Plain files** in `engineer/` record what you predicted, how it turned out, and what you explained, so you can read your own track record.
 
 ## Install
 
 ```
-/plugin marketplace add AliZareh-CoE/tandem
-/plugin install tandem@tandem
+/plugin marketplace add AliZareh-CoE/engineer-mode
+/plugin install engineer@engineer-mode
 ```
 
-To try it without installing: `claude --plugin-dir /path/to/tandem`.
+To try it without installing: `claude --plugin-dir /path/to/engineer`.
 
 The hooks run with `node` (v18 or later), so `node` must be on the machine.
 
 ## Switch it on
 
-Installing changes nothing by itself: tandem mode is **off** until you switch it on for a project.
+Installing changes nothing by itself: engineer mode is **off** until you switch it on for a project.
 
 | Command | Effect |
 |---|---|
-| `/tandem:on` | on for this project, right now, in the current session (and in every later session there) |
-| `/tandem:off` | off for this project |
-| `/tandem:status` | shows the mode, the gate and your levels |
+| `/engineer:on` | on for this project, right now, in the current session (and in every later session there) |
+| `/engineer:off` | off for this project |
+| `/engineer:status` | shows the mode, the gate and your levels |
 
-Claude Code has its own built-in `/focus` command (a view toggle). Tandem's commands carry the `tandem:` prefix, so they never collide with it.
+Claude Code has its own built-in `/focus` command (a view toggle). The commands here carry the `engineer:` prefix, so they never collide with it.
 
-The mode lives in `tandem/state.json` (`"mode": "on"`). A launcher can force it for one session with the environment variable `TANDEM_MODE=on` (or `off`), which wins over the file.
+The mode lives in `engineer/state.json` (`"mode": "on"`). A launcher can force it for one session with the environment variable `ENGINEER_MODE=on` (or `off`), which wins over the file.
 
 ## Use
 
@@ -48,11 +48,11 @@ Write these at the start of a line in your own messages. The hook stores them, s
 
 The AI sets your prediction beside the result and says how they compare.
 
-**Starting a project.** Two equal ways in: write what you think the project is, or say you do not know and let the AI walk you through the folder in the order a reviewer would read it. Either way you end by writing a one-page brief alone. See `skills/tandem/SKILL.md` for the full session guide (understanding, methods, levels).
+**Starting a project.** Two equal ways in: write what you think the project is, or say you do not know and let the AI walk you through the folder in the order a reviewer would read it. Either way you end by writing a one-page brief alone. See `skills/engineer/SKILL.md` for the full session guide (understanding, methods, levels).
 
 ## Levels
 
-Each domain (statistics, anatomy, a codebase) has its own level in `tandem/state.json`:
+Each domain (statistics, anatomy, a codebase) has its own level in `engineer/state.json`:
 
 1. **Guided**: the AI proposes the structure and you fill it.
 2. **Paired**: you write the first draft and the AI responds.
@@ -64,7 +64,7 @@ The level changes who moves first. It never changes what the AI will say when it
 ## Files
 
 ```
-tandem/
+engineer/
   state.json          levels per domain, gate "on" or "off"
   predictions.jsonl   your predictions, outcomes and scores
   teachbacks.jsonl    your one-sentence explanations
@@ -78,11 +78,11 @@ Set `"gate": "off"` in `state.json` to keep the teaching and drop the holds for 
 - **Results:** `python`, `pytest`, `Rscript`, `cargo test|run|bench`, `npm test|run`, `node`, `make`, `jupyter` and run-scripts, including inside `&&`, `;`, pipes, `sh -c "..."`, `env`/`nohup`/`time` wrappers.
 - **Files:** `CLAIMS.md`, `PROTOCOL.md`, `RESULTS.md` and anything under `paper/`.
 
-These patterns are a heuristic. A command that produces a result by another route is not held. Adjust `RUN_RE` and `GATED_PATH_RE` in `scripts/tandem-core.js` for your work.
+These patterns are a heuristic. A command that produces a result by another route is not held. Adjust `RUN_RE` and `GATED_PATH_RE` in `scripts/engineer-core.js` for your work.
 
 ## Calibration
 
-`calibration(cwd)` in `scripts/tandem-core.js` returns, for each confidence bucket, how often your scored predictions were right. If your 80% predictions are right about 80% of the time, you understand the work.
+`calibration(cwd)` in `scripts/engineer-core.js` returns, for each confidence bucket, how often your scored predictions were right. If your 80% predictions are right about 80% of the time, you understand the work.
 
 ## Test
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// Claude Code hook entry point: `node tandem-hook.js <prompt|pre|post>`; the event arrives as JSON on stdin.
-// start:  when tandem mode is on, load the rules into the new session
+// Claude Code hook entry point: `node engineer-hook.js <prompt|pre|post>`; the event arrives as JSON on stdin.
+// start:  when engineer mode is on, load the rules into the new session
 // prompt: record the user's predict:/teach:/hit:/miss: lines, and add a one-line reminder to the turn
 // pre:    hold a result-producing command until a prediction exists; hold claim/protocol edits until a teach-back exists
 // post:   after a gated command, put the prediction next to the result
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterRun, decide, init, modeOn, recordUserLines, reminder } from "./tandem-core.js";
+import { afterRun, decide, init, modeOn, recordUserLines, reminder } from "./engineer-core.js";
 
 const mode = process.argv[2];
 let raw = "";
@@ -19,7 +19,7 @@ process.stdin.on("end", () => {
   try {
     if (!modeOn(cwd)) process.exit(0); // installed but not switched on for this project: change nothing, create nothing
     if (mode === "start") {
-      const rules = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "prompts", "tandem-system.md"), "utf8");
+      const rules = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "prompts", "engineer-system.md"), "utf8");
       init(cwd);
       process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: rules } }));
     } else if (mode === "prompt") {
@@ -34,7 +34,7 @@ process.stdin.on("end", () => {
       if (note) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: note } }));
     }
   } catch (e) {
-    process.stderr.write(`tandem hook error (ignored): ${e.message}\n`); // a bug here must never lock the user out
+    process.stderr.write(`engineer hook error (ignored): ${e.message}\n`); // a bug here must never lock the user out
   }
   process.exit(0);
 });

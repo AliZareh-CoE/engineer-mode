@@ -1,6 +1,6 @@
-// Tandem mode: the part that is enforced by code, not by the model.
+// Engineer mode: the part that is enforced by code, not by the model.
 //
-// State lives in <project>/tandem/ (plain files the user can read and edit):
+// State lives in <project>/engineer/ (plain files the user can read and edit):
 //   state.json         {"level": {"<domain>": 1..4}, "gate": "on"|"off"}
 //   predictions.jsonl  what the USER predicted before a result was shown, and whether it was right
 //   teachbacks.jsonl   one-line explanations the USER wrote before a claim or protocol was changed
@@ -35,10 +35,16 @@ export const RUN_RE = { test: (c) => isResultCommand(c) };
 // Files where a claim, a protocol or a paper number lives.
 export const GATED_PATH_RE = /(?:^|\/)(?:CLAIMS|PROTOCOL|RESULTS)\.md$|(?:^|\/)paper\//i;
 
-/** <project>/tandem/. A folder from the plugin's earlier name (focus/, recognised by its state.json) is renamed once, so nothing is lost. */
+/** <project>/engineer/. A folder from the plugin's earlier names (tandem/, focus/; recognised by their state.json) is renamed once, so nothing is lost. */
+const LEGACY_DIRS = ["tandem", "focus"];
 const dir = (cwd) => {
-  const t = join(cwd, "tandem"), legacy = join(cwd, "focus");
-  if (!existsSync(t) && existsSync(join(legacy, "state.json"))) { try { renameSync(legacy, t); } catch { /* read-only project: the old folder stays unused */ } }
+  const t = join(cwd, "engineer");
+  if (!existsSync(t)) {
+    for (const name of LEGACY_DIRS) {
+      const legacy = join(cwd, name);
+      if (existsSync(join(legacy, "state.json"))) { try { renameSync(legacy, t); } catch { /* read-only project: the old folder stays unused */ } break; }
+    }
+  }
   return t;
 };
 const readJson = (p, d) => { try { return JSON.parse(readFileSync(p, "utf8")); } catch { return d; } };
@@ -48,18 +54,18 @@ const ensure = (cwd) => mkdirSync(dir(cwd), { recursive: true });
 
 export const loadState = (cwd) => ({ ...DEFAULT_STATE, ...readJson(join(dir(cwd), "state.json"), {}) });
 /**
- * Is tandem mode on here? The environment wins (TANDEM_MODE=on|off, set by a launcher), else tandem/state.json's "mode".
- * Off by default, so installing the plugin changes nothing until a project (or a session) opts in with /tandem:on.
+ * Is engineer mode on here? The environment wins (ENGINEER_MODE=on|off, set by a launcher), else engineer/state.json's "mode".
+ * Off by default, so installing the plugin changes nothing until a project (or a session) opts in with /engineer:on.
  */
 export function modeOn(cwd, env = process.env) {
-  const e = String(env.TANDEM_MODE || env.FOCUS_MODE || "").toLowerCase(); // FOCUS_MODE: the variable from the plugin's earlier name
+  const e = String(env.ENGINEER_MODE || env.TANDEM_MODE || env.FOCUS_MODE || "").toLowerCase(); // TANDEM_MODE / FOCUS_MODE: the variables from the plugin's earlier names
   if (e === "on") return true;
   if (e === "off") return false;
   return loadState(cwd).mode === "on";
 }
 export const gateOn = (cwd, env = process.env) => modeOn(cwd, env) && loadState(cwd).gate !== "off";
 
-/** Switch tandem mode on or off for this project (persists for later sessions). */
+/** Switch engineer mode on or off for this project (persists for later sessions). */
 export function setMode(cwd, on) {
   ensure(cwd);
   const sp = join(dir(cwd), "state.json");
@@ -67,8 +73,8 @@ export function setMode(cwd, on) {
   if (on) init(cwd);
 }
 
-/** The few commands that switch modes are never held by the gate (turning tandem off must not need a prediction). */
-export const CLI_RE = /^node\s+"?(?:[^;&|`$<>\n]|\$\{CLAUDE_PLUGIN_ROOT\})*tandem-cli\.js"?\s+(?:on|off|status|gate\s+(?:on|off)|level\s+\S+\s+[1-4])\s*$/;
+/** The few commands that switch modes are never held by the gate (turning engineer off must not need a prediction). */
+export const CLI_RE = /^node\s+"?(?:[^;&|`$<>\n]|\$\{CLAUDE_PLUGIN_ROOT\})*engineer-cli\.js"?\s+(?:on|off|status|gate\s+(?:on|off)|level\s+\S+\s+[1-4])\s*$/;
 
 /**
  * Parse the user's own message. Lines that start with a marker are records:
@@ -165,7 +171,7 @@ export function reminder(cwd) {
   const open = readLines(join(dir(cwd), "teachbacks.jsonl")).filter((x) => x.status === "open").length;
   const preds = readLines(join(dir(cwd), "predictions.jsonl"));
   const openP = preds.filter((x) => x.status === "open").length;
-  return `[tandem] levels: ${lv}. Gate: ${st.gate}. Open predictions: ${openP}. Unused teach-backs: ${open}. Follow tandem/state.json for the level in each domain.`;
+  return `[engineer] levels: ${lv}. Gate: ${st.gate}. Open predictions: ${openP}. Unused teach-backs: ${open}. Follow engineer/state.json for the level in each domain.`;
 }
 
 /** Calibration from the user's own scored predictions: for each confidence bucket, how often they were right. */
