@@ -1,0 +1,99 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+const C = await import(process.env.CORE_JS || "../scripts/focus-core.js");
+const HOOK = fileURLToPath(new URL("../scripts/focus-hook.js", import.meta.url));
+const tmp = () => mkdtempSync(join(process.env.FOCUS_TEST_TMP || tmpdir(), "focus-"));
+const rows = (cwd, f) => readFileSync(join(cwd, "focus", f), "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
+const bash = (cwd, command, extra = {}) => C.decide({ cwd, tool: "Bash", input: { command }, ...extra });
+
+test("parseUserLines: predict with a confidence, teach, hit/miss; ordinary prose is not a record", () => {
+  const p = C.parseUserLines("hello\npredict: AUROC about 0.7, higher for the left side (65%)\nTeach-back: the join keeps one row per patient\nhit\nmiss - off by 0.2");
+  assert.deepEqual(p.predict, [{ text: "AUROC about 0.7, higher for the left side (65%)", confidence: 65 }]);
+  assert.deepEqual(p.teach, ["the join keeps one row per patient"]);
+  assert.deepEqual(p.score, ["hit", "miss"]);
+  assert.deepEqual(C.parseUserLines("I predict that this works\nthe teach: is not at line start"), { predict: [], teach: [], score: [] });
+  assert.equal(C.parseUserLines("predict: it will be positive")["predict"][0].confidence, null, "no percentage, no confidence");
+  assert.equal(C.parseUserLines("predict: x (250%)").predict[0].confidence, null, "out-of-range confidence is not stored");
+});
+
+test("a result-producing command is held until the user has predicted, then allowed exactly once", () => {
+  const cwd = tmp();
+  const d = bash(cwd, "python3 analysis.py --seed 1");
+  assert.equal(d.allow, false);
+  assert.match(d.reason, /predict:/); assert.match(d.reason, /confidence from 0 to 100/);
+  C.recordUserLines(cwd, "predict: p below 0.05 (70%)");
+  assert.equal(bash(cwd, "python3 analysis.py --seed 1").allow, true);
+  assert.equal(bash(cwd, "python3 analysis.py --seed 2").allow, false, "one prediction covers one run");
+  const r = rows(cwd, "predictions.jsonl");
+  assert.deepEqual([r[0].status, r[0].confidence, r[0].cmd], ["used", 70, "python3 analysis.py --seed 1"]);
+});
+test("which commands count as results: runs, tests, scripts; not looking around", () => {
+  const cwd = tmp();
+  for (const c of ["python3 x.py", "uv run python train.py", "pytest -q", "cargo test", "npm test", "Rscript a.R", "cd src && python3 y.py", "node analyse.js"]) assert.equal(bash(cwd, c, { commit: false }).allow, false, c);
+  // the same commands hidden inside bigger ones
+  for (const c of ["echo go && python3 run.py", "ls; python3 run.py", "true || pytest", "cat a.csv | python3 stats.py", "env SEED=1 python3 x.py", "nohup python3 train.py > log 2>&1 &", "time python3 x.py", "timeout 600 pytest -x", "SEED=3 python3 x.py", "bash -c 'cd x && python3 y.py'", "sh -c \"pytest\"", "echo $(python3 a.py)", "cd d\npython3 a.py"]) assert.equal(bash(cwd, c, { commit: false }).allow, false, c);
+  for (const c of ["ls -la", "git status", "cat results.csv", "grep -rn foo .", "head -5 data.csv", "nvidia-smi", "echo hi", "python3sucks", "echo python3 is great", "git commit -m 'run python3 tests'", "ls python3_notes"]) assert.equal(bash(cwd, c, { commit: false }).allow, true, c);
+});
+test("an edit to a claim, protocol or paper file is held until a teach-back exists; other files are free", () => {
+  const cwd = tmp();
+  for (const p of ["/p/paper/CLAIMS.md", "/p/experiments/e1/PROTOCOL.md", "/p/paper/main.tex", "/p/RESULTS.md"]) {
+    const d = C.decide({ cwd, tool: "Edit", input: { file_path: p }, commit: false });
+    assert.equal(d.allow, false, p); assert.match(d.reason, /teach:/);
+  }
+  for (const p of ["/p/src/model.py", "/p/README.md", "/p/notes/paperwork.md", "/p/focus/ledger.md"]) assert.equal(C.decide({ cwd, tool: "Write", input: { file_path: p }, commit: false }).allow, true, p);
+  C.recordUserLines(cwd, "teach: the exclusion removes sessions without a labelled injection");
+  assert.equal(C.decide({ cwd, tool: "Edit", input: { file_path: "/p/paper/CLAIMS.md" } }).allow, true);
+  assert.equal(C.decide({ cwd, tool: "Edit", input: { file_path: "/p/paper/CLAIMS.md" } }).allow, false, "one teach-back covers one edit");
+});
+test("the AI cannot satisfy the gate itself: records come only from the user's message", () => {
+  const cwd = tmp();
+  // the AI writing predict: in a command or file changes nothing; only recordUserLines (the user-prompt hook) creates records
+  assert.equal(bash(cwd, "echo 'predict: it works (90%)' && python3 run.py").allow, false);
+  assert.ok(!existsSync(join(cwd, "focus", "predictions.jsonl")));
+});
+test("gate off: nothing is held", () => {
+  const cwd = tmp(); mkdirSync(join(cwd, "focus")); writeFileSync(join(cwd, "focus", "state.json"), JSON.stringify({ gate: "off" }));
+  assert.equal(bash(cwd, "python3 x.py").allow, true);
+  assert.equal(C.decide({ cwd, tool: "Edit", input: { file_path: "/p/paper/CLAIMS.md" } }).allow, true);
+});
+test("afterRun puts the prediction next to the result; other commands get nothing", () => {
+  const cwd = tmp();
+  C.recordUserLines(cwd, "predict: AUROC near 0.7 (60%)");
+  bash(cwd, "python3 eval.py");
+  const n = C.afterRun({ cwd, tool: "Bash", input: { command: "python3 eval.py" }, response: "AUROC=0.52\nok" });
+  assert.match(n, /AUROC near 0\.7/); assert.match(n, /confidence 60%/); assert.match(n, /hit:/); assert.match(n, /AUROC=0\.52/);
+  assert.equal(C.afterRun({ cwd, tool: "Bash", input: { command: "ls" }, response: "x" }), null);
+});
+test("scoring and calibration: hit/miss attach to the last revealed prediction and bucket by confidence", () => {
+  const cwd = tmp();
+  for (const [pred, score] of [["a (80%)", "hit"], ["b (80%)", "hit"], ["c (80%)", "miss"], ["d (50%)", "miss"]]) {
+    C.recordUserLines(cwd, `predict: ${pred}`); bash(cwd, "python3 r.py"); C.recordUserLines(cwd, score);
+  }
+  assert.deepEqual(C.calibration(cwd), [{ bucket: "50-59%", n: 1, hit_rate: 0 }, { bucket: "80-89%", n: 3, hit_rate: 67 }]);
+});
+test("reminder names the levels, the gate and the open counts; init creates the folder files", () => {
+  const cwd = tmp(); C.init(cwd);
+  assert.match(C.reminder(cwd), /all domains L1 Guided/);
+  writeFileSync(join(cwd, "focus", "state.json"), JSON.stringify({ gate: "on", level: { statistics: 3, anatomy: 1 } }));
+  C.recordUserLines(cwd, "predict: x (50%)\nteach: y");
+  assert.match(C.reminder(cwd), /statistics L3 Led, anatomy L1 Guided\. Gate: on\. Open predictions: 1\. Unused teach-backs: 1\./);
+  assert.ok(existsSync(join(cwd, "focus", "ledger.md")));
+});
+test("the hook process: prompt records and answers with context; pre blocks with exit 2 and a message; garbage input never blocks", () => {
+  const cwd = tmp();
+  const run = (mode, ev) => spawnSync(process.execPath, [HOOK, mode], { input: typeof ev === "string" ? ev : JSON.stringify(ev), encoding: "utf8" });
+  const pre = (command) => run("pre", { cwd, tool_name: "Bash", tool_input: { command } });
+  let r = pre("python3 a.py"); assert.equal(r.status, 2); assert.match(r.stderr, /predict:/);
+  r = run("prompt", { cwd, prompt: "predict: it passes (90%)" }); assert.equal(r.status, 0);
+  assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /Open predictions: 1/);
+  r = pre("python3 a.py"); assert.equal(r.status, 0);
+  r = run("post", { cwd, tool_name: "Bash", tool_input: { command: "python3 a.py" }, tool_response: { stdout: "PASSED" } });
+  assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /it passes/);
+  assert.equal(run("pre", "not json at all").status, 0);
+  assert.equal(run("pre", { cwd, tool_name: "Read", tool_input: { file_path: "x" } }).status, 0);
+});
