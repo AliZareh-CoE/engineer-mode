@@ -1,6 +1,6 @@
-// Focus mode: the part that is enforced by code, not by the model.
+// Tandem mode: the part that is enforced by code, not by the model.
 //
-// State lives in <project>/focus/ (plain files the user can read and edit):
+// State lives in <project>/tandem/ (plain files the user can read and edit):
 //   state.json         {"level": {"<domain>": 1..4}, "gate": "on"|"off"}
 //   predictions.jsonl  what the USER predicted before a result was shown, and whether it was right
 //   teachbacks.jsonl   one-line explanations the USER wrote before a claim or protocol was changed
@@ -9,7 +9,7 @@
 // Predictions and teach-backs are recorded from the user's own message by the UserPromptSubmit hook, so the AI cannot
 // write them for the user. The PreToolUse hook holds a result-producing command (or an edit to a claim/protocol file)
 // until the matching record exists, and consumes it when the command is allowed.
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const DEFAULT_STATE = { mode: "off", gate: "on", level: {} };
@@ -35,7 +35,12 @@ export const RUN_RE = { test: (c) => isResultCommand(c) };
 // Files where a claim, a protocol or a paper number lives.
 export const GATED_PATH_RE = /(?:^|\/)(?:CLAIMS|PROTOCOL|RESULTS)\.md$|(?:^|\/)paper\//i;
 
-const dir = (cwd) => join(cwd, "focus");
+/** <project>/tandem/. A folder from the plugin's earlier name (focus/, recognised by its state.json) is renamed once, so nothing is lost. */
+const dir = (cwd) => {
+  const t = join(cwd, "tandem"), legacy = join(cwd, "focus");
+  if (!existsSync(t) && existsSync(join(legacy, "state.json"))) { try { renameSync(legacy, t); } catch { /* read-only project: the old folder stays unused */ } }
+  return t;
+};
 const readJson = (p, d) => { try { return JSON.parse(readFileSync(p, "utf8")); } catch { return d; } };
 const readLines = (p) => { try { return readFileSync(p, "utf8").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch { return []; } };
 const writeLines = (p, rows) => writeFileSync(p, rows.map((r) => JSON.stringify(r)).join("\n") + (rows.length ? "\n" : ""));
@@ -43,18 +48,18 @@ const ensure = (cwd) => mkdirSync(dir(cwd), { recursive: true });
 
 export const loadState = (cwd) => ({ ...DEFAULT_STATE, ...readJson(join(dir(cwd), "state.json"), {}) });
 /**
- * Is focus mode on here? The environment wins (FOCUS_MODE=on|off, set by a launcher), else focus/state.json's "mode".
- * Off by default, so installing the plugin changes nothing until a project (or a session) opts in with /focus:on.
+ * Is tandem mode on here? The environment wins (TANDEM_MODE=on|off, set by a launcher), else tandem/state.json's "mode".
+ * Off by default, so installing the plugin changes nothing until a project (or a session) opts in with /tandem:on.
  */
 export function modeOn(cwd, env = process.env) {
-  const e = String(env.FOCUS_MODE || "").toLowerCase();
+  const e = String(env.TANDEM_MODE || env.FOCUS_MODE || "").toLowerCase(); // FOCUS_MODE: the variable from the plugin's earlier name
   if (e === "on") return true;
   if (e === "off") return false;
   return loadState(cwd).mode === "on";
 }
 export const gateOn = (cwd, env = process.env) => modeOn(cwd, env) && loadState(cwd).gate !== "off";
 
-/** Switch focus mode on or off for this project (persists for later sessions). */
+/** Switch tandem mode on or off for this project (persists for later sessions). */
 export function setMode(cwd, on) {
   ensure(cwd);
   const sp = join(dir(cwd), "state.json");
@@ -62,8 +67,8 @@ export function setMode(cwd, on) {
   if (on) init(cwd);
 }
 
-/** The few commands that switch modes are never held by the gate (turning focus off must not need a prediction). */
-export const CLI_RE = /^node\s+"?(?:[^;&|`$<>\n]|\$\{CLAUDE_PLUGIN_ROOT\})*focus-cli\.js"?\s+(?:on|off|status|gate\s+(?:on|off)|level\s+\S+\s+[1-4])\s*$/;
+/** The few commands that switch modes are never held by the gate (turning tandem off must not need a prediction). */
+export const CLI_RE = /^node\s+"?(?:[^;&|`$<>\n]|\$\{CLAUDE_PLUGIN_ROOT\})*tandem-cli\.js"?\s+(?:on|off|status|gate\s+(?:on|off)|level\s+\S+\s+[1-4])\s*$/;
 
 /**
  * Parse the user's own message. Lines that start with a marker are records:
@@ -160,7 +165,7 @@ export function reminder(cwd) {
   const open = readLines(join(dir(cwd), "teachbacks.jsonl")).filter((x) => x.status === "open").length;
   const preds = readLines(join(dir(cwd), "predictions.jsonl"));
   const openP = preds.filter((x) => x.status === "open").length;
-  return `[focus mode] levels: ${lv}. Gate: ${st.gate}. Open predictions: ${openP}. Unused teach-backs: ${open}. Follow focus/state.json for the level in each domain.`;
+  return `[tandem] levels: ${lv}. Gate: ${st.gate}. Open predictions: ${openP}. Unused teach-backs: ${open}. Follow tandem/state.json for the level in each domain.`;
 }
 
 /** Calibration from the user's own scored predictions: for each confidence bucket, how often they were right. */

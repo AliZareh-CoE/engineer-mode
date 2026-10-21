@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/focus-hook.js\" prompt"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/tandem-hook.js\" prompt"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/focus-hook.js\" pre"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/tandem-hook.js\" pre"
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/focus-hook.js\" post"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/tandem-hook.js\" post"
           }
         ]
       }
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/focus-hook.js\" start"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/tandem-hook.js\" start"
           }
         ]
       }

@@ -1,14 +1,14 @@
 {
-  "name": "focus",
+  "name": "tandem",
   "version": "0.2.0",
-  "description": "Focus mode: a two-way working session where the AI teaches and the user guides, with predictions, teach-backs and a ledger enforced by hooks.",
+  "description": "Tandem mode: a two-way working session where the AI teaches and the user guides, with predictions, teach-backs and a ledger enforced by hooks.",
   "author": {
     "name": "Ali Zareh"
   },
   "license": "MIT",
-  "repository": "https://github.com/AliZareh-CoE/focus-mode",
+  "repository": "https://github.com/AliZareh-CoE/tandem",
   "keywords": [
-    "focus",
+    "tandem",
     "learning",
     "research",
     "teach-back",

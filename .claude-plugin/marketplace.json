@@ -1,9 +1,9 @@
 {
-  "name": "focus-mode",
+  "name": "tandem",
   "owner": { "name": "Ali Zareh" },
   "plugins": [
     {
-      "name": "focus",
+      "name": "tandem",
       "source": "./",
       "description": "A two-way working mode for Claude Code: the AI teaches and the user guides. Predictions before results and explanations before claims are enforced by hooks."
     }

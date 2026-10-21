@@ -5,11 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-const C = await import(process.env.CORE_JS || "../scripts/focus-core.js");
-const HOOK = fileURLToPath(new URL("../scripts/focus-hook.js", import.meta.url));
-const tmp = (on = true) => { const d = mkdtempSync(join(process.env.FOCUS_TEST_TMP || tmpdir(), "focus-")); if (on) C.setMode(d, true); return d; };
-const CLI = fileURLToPath(new URL("../scripts/focus-cli.js", import.meta.url));
-const rows = (cwd, f) => readFileSync(join(cwd, "focus", f), "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
+const C = await import(process.env.CORE_JS || "../scripts/tandem-core.js");
+const HOOK = fileURLToPath(new URL("../scripts/tandem-hook.js", import.meta.url));
+const tmp = (on = true) => { const d = mkdtempSync(join(process.env.TANDEM_TEST_TMP || tmpdir(), "tandem-")); if (on) C.setMode(d, true); return d; };
+const CLI = fileURLToPath(new URL("../scripts/tandem-cli.js", import.meta.url));
+const rows = (cwd, f) => readFileSync(join(cwd, "tandem", f), "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 const bash = (cwd, command, extra = {}) => C.decide({ cwd, tool: "Bash", input: { command }, ...extra });
 
 test("parseUserLines: predict with a confidence, teach, hit/miss; ordinary prose is not a record", () => {
@@ -46,7 +46,7 @@ test("an edit to a claim, protocol or paper file is held until a teach-back exis
     const d = C.decide({ cwd, tool: "Edit", input: { file_path: p }, commit: false });
     assert.equal(d.allow, false, p); assert.match(d.reason, /teach:/);
   }
-  for (const p of ["/p/src/model.py", "/p/README.md", "/p/notes/paperwork.md", "/p/focus/ledger.md"]) assert.equal(C.decide({ cwd, tool: "Write", input: { file_path: p }, commit: false }).allow, true, p);
+  for (const p of ["/p/src/model.py", "/p/README.md", "/p/notes/paperwork.md", "/p/tandem/ledger.md"]) assert.equal(C.decide({ cwd, tool: "Write", input: { file_path: p }, commit: false }).allow, true, p);
   C.recordUserLines(cwd, "teach: the exclusion removes sessions without a labelled injection");
   assert.equal(C.decide({ cwd, tool: "Edit", input: { file_path: "/p/paper/CLAIMS.md" } }).allow, true);
   assert.equal(C.decide({ cwd, tool: "Edit", input: { file_path: "/p/paper/CLAIMS.md" } }).allow, false, "one teach-back covers one edit");
@@ -55,10 +55,10 @@ test("the AI cannot satisfy the gate itself: records come only from the user's m
   const cwd = tmp();
   // the AI writing predict: in a command or file changes nothing; only recordUserLines (the user-prompt hook) creates records
   assert.equal(bash(cwd, "echo 'predict: it works (90%)' && python3 run.py").allow, false);
-  assert.ok(!existsSync(join(cwd, "focus", "predictions.jsonl")));
+  assert.ok(!existsSync(join(cwd, "tandem", "predictions.jsonl")));
 });
 test("gate off: nothing is held", () => {
-  const cwd = tmp(); writeFileSync(join(cwd, "focus", "state.json"), JSON.stringify({ mode: "on", gate: "off" }));
+  const cwd = tmp(); writeFileSync(join(cwd, "tandem", "state.json"), JSON.stringify({ mode: "on", gate: "off" }));
   assert.equal(bash(cwd, "python3 x.py").allow, true);
   assert.equal(C.decide({ cwd, tool: "Edit", input: { file_path: "/p/paper/CLAIMS.md" } }).allow, true);
 });
@@ -80,10 +80,10 @@ test("scoring and calibration: hit/miss attach to the last revealed prediction a
 test("reminder names the levels, the gate and the open counts; init creates the folder files", () => {
   const cwd = tmp(); C.init(cwd);
   assert.match(C.reminder(cwd), /all domains L1 Guided/);
-  writeFileSync(join(cwd, "focus", "state.json"), JSON.stringify({ mode: "on", gate: "on", level: { statistics: 3, anatomy: 1 } }));
+  writeFileSync(join(cwd, "tandem", "state.json"), JSON.stringify({ mode: "on", gate: "on", level: { statistics: 3, anatomy: 1 } }));
   C.recordUserLines(cwd, "predict: x (50%)\nteach: y");
   assert.match(C.reminder(cwd), /statistics L3 Led, anatomy L1 Guided\. Gate: on\. Open predictions: 1\. Unused teach-backs: 1\./);
-  assert.ok(existsSync(join(cwd, "focus", "ledger.md")));
+  assert.ok(existsSync(join(cwd, "tandem", "ledger.md")));
 });
 test("the hook process: prompt records and answers with context; pre blocks with exit 2 and a message; garbage input never blocks", () => {
   const cwd = tmp();
@@ -100,8 +100,8 @@ test("the hook process: prompt records and answers with context; pre blocks with
 });
 
 // ---------------------------------------------------------------- mode: off until switched on
-const hookRun = (mode, ev, env = {}) => spawnSync(process.execPath, [HOOK, mode], { input: JSON.stringify(ev), encoding: "utf8", env: { ...process.env, FOCUS_MODE: "", ...env } });
-const cliRun = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args], { encoding: "utf8", env: { ...process.env, FOCUS_MODE: "", CLAUDE_PROJECT_DIR: cwd } });
+const hookRun = (mode, ev, env = {}) => spawnSync(process.execPath, [HOOK, mode], { input: JSON.stringify(ev), encoding: "utf8", env: { ...process.env, TANDEM_MODE: "", ...env } });
+const cliRun = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args], { encoding: "utf8", env: { ...process.env, TANDEM_MODE: "", CLAUDE_PROJECT_DIR: cwd } });
 
 test("off by default: nothing is held, nothing is created, the hooks say nothing, in every project the plugin is installed in", () => {
   const cwd = tmp(false);
@@ -109,38 +109,55 @@ test("off by default: nothing is held, nothing is created, the hooks say nothing
   assert.equal(bash(cwd, "python3 x.py").allow, true);
   assert.equal(C.decide({ cwd, tool: "Edit", input: { file_path: "/p/paper/CLAIMS.md" } }).allow, true);
   for (const m of ["start", "prompt", "pre", "post"]) { const r = hookRun(m, { cwd, prompt: "predict: x (50%)", tool_name: "Bash", tool_input: { command: "python3 a.py" } }); assert.equal(r.status, 0, m); assert.equal(r.stdout, "", m); }
-  assert.ok(!existsSync(join(cwd, "focus")), "no folder is created in a project that did not opt in");
+  assert.ok(!existsSync(join(cwd, "tandem")), "no folder is created in a project that did not opt in");
 });
-test("the environment wins over the project file: FOCUS_MODE=on / off", () => {
+test("the environment wins over the project file: TANDEM_MODE=on / off", () => {
   const off = tmp(false), on = tmp(true);
-  assert.equal(C.modeOn(off, { FOCUS_MODE: "on" }), true);
-  assert.equal(C.modeOn(on, { FOCUS_MODE: "off" }), false);
-  assert.equal(C.modeOn(on, { FOCUS_MODE: "" }), true);
-  assert.equal(C.modeOn(off, { FOCUS_MODE: "maybe" }), false);
-  assert.equal(hookRun("pre", { cwd: off, tool_name: "Bash", tool_input: { command: "python3 a.py" } }, { FOCUS_MODE: "on" }).status, 2);
+  assert.equal(C.modeOn(off, { TANDEM_MODE: "on" }), true);
+  assert.equal(C.modeOn(on, { TANDEM_MODE: "off" }), false);
+  assert.equal(C.modeOn(on, { TANDEM_MODE: "" }), true);
+  assert.equal(C.modeOn(off, { TANDEM_MODE: "maybe" }), false);
+  assert.equal(hookRun("pre", { cwd: off, tool_name: "Bash", tool_input: { command: "python3 a.py" } }, { TANDEM_MODE: "on" }).status, 2);
 });
-test("the session-start hook loads the rules when focus is on, and says nothing when it is off", () => {
+test("the session-start hook loads the rules when tandem is on, and says nothing when it is off", () => {
   const on = tmp(true);
   const r = hookRun("start", { cwd: on });
   assert.equal(r.status, 0);
   const ctx = JSON.parse(r.stdout).hookSpecificOutput;
-  assert.equal(ctx.hookEventName, "SessionStart"); assert.match(ctx.additionalContext, /^FOCUS MODE\./);
+  assert.equal(ctx.hookEventName, "SessionStart"); assert.match(ctx.additionalContext, /^TANDEM MODE\./);
   assert.equal(hookRun("start", { cwd: tmp(false) }).stdout, "");
 });
 test("the CLI: on prints the rules and persists; off persists; status, gate and level work; bad use exits 2", () => {
   const cwd = tmp(false);
-  let r = cliRun(cwd, "status"); assert.match(r.stdout, /^Focus mode: off\. Gate: on\. Levels: all domains L1 Guided\./);
-  r = cliRun(cwd, "on"); assert.equal(r.status, 0); assert.match(r.stdout, /Focus mode is on for this project/); assert.match(r.stdout, /FOCUS MODE\./);
+  let r = cliRun(cwd, "status"); assert.match(r.stdout, /^Tandem mode: off\. Gate: on\. Levels: all domains L1 Guided\./);
+  r = cliRun(cwd, "on"); assert.equal(r.status, 0); assert.match(r.stdout, /Tandem mode is on for this project/); assert.match(r.stdout, /TANDEM MODE\./);
   assert.equal(C.modeOn(cwd, {}), true, "persisted for later sessions");
-  assert.ok(existsSync(join(cwd, "focus", "ledger.md")));
+  assert.ok(existsSync(join(cwd, "tandem", "ledger.md")));
   cliRun(cwd, "level", "statistics", "3"); cliRun(cwd, "gate", "off");
   assert.match(cliRun(cwd, "status").stdout, /Gate: off\. Levels: statistics L3 Led\./);
-  r = cliRun(cwd, "off"); assert.match(r.stdout, /Focus mode is off/); assert.equal(C.modeOn(cwd, {}), false);
-  assert.equal(JSON.parse(readFileSync(join(cwd, "focus", "state.json"), "utf8")).level.statistics, 3, "levels survive switching off and on");
+  r = cliRun(cwd, "off"); assert.match(r.stdout, /Tandem mode is off/); assert.equal(C.modeOn(cwd, {}), false);
+  assert.equal(JSON.parse(readFileSync(join(cwd, "tandem", "state.json"), "utf8")).level.statistics, 3, "levels survive switching off and on");
   for (const bad of [["level", "x", "9"], ["gate", "maybe"], ["dance"], []]) assert.equal(cliRun(cwd, ...bad).status, 2, bad.join(" "));
 });
 test("switching modes is never held by the gate, but a compound command around it is", () => {
   const cwd = tmp(true);
-  for (const c of ['node "/plugins/focus/scripts/focus-cli.js" off', "node /a/b/focus-cli.js status", 'node "${CLAUDE_PLUGIN_ROOT}/scripts/focus-cli.js" on', "node /x/focus-cli.js level stats 3"]) assert.equal(bash(cwd, c, { commit: false }).allow, true, c);
-  for (const c of ["python3 evil.py && node /a/focus-cli.js off", "node /a/focus-cli.js off; python3 x.py", "node /a/focus-cli.js off | python3 x.py", "node /a/focus-cli.js dance", "node /a/other.js"]) assert.equal(bash(cwd, c, { commit: false }).allow, false, c);
+  for (const c of ['node "/plugins/tandem/scripts/tandem-cli.js" off', "node /a/b/tandem-cli.js status", 'node "${CLAUDE_PLUGIN_ROOT}/scripts/tandem-cli.js" on', "node /x/tandem-cli.js level stats 3"]) assert.equal(bash(cwd, c, { commit: false }).allow, true, c);
+  for (const c of ["python3 evil.py && node /a/tandem-cli.js off", "node /a/tandem-cli.js off; python3 x.py", "node /a/tandem-cli.js off | python3 x.py", "node /a/tandem-cli.js dance", "node /a/other.js"]) assert.equal(bash(cwd, c, { commit: false }).allow, false, c);
+});
+
+test("a project folder from the earlier name (focus/) is moved to tandem/ once, with its records; an unrelated focus folder is left alone", () => {
+  const d = mkdtempSync(join(process.env.TANDEM_TEST_TMP || tmpdir(), "tandem-mig-"));
+  mkdirSync(join(d, "focus")); writeFileSync(join(d, "focus", "state.json"), JSON.stringify({ mode: "on", gate: "on", level: { stats: 2 } })); writeFileSync(join(d, "focus", "predictions.jsonl"), '{"id":1,"status":"used"}\n');
+  assert.equal(C.modeOn(d, {}), true, "the old project is still on");
+  assert.ok(existsSync(join(d, "tandem", "predictions.jsonl")) && !existsSync(join(d, "focus")));
+  assert.equal(C.loadState(d).level.stats, 2);
+  const other = mkdtempSync(join(process.env.TANDEM_TEST_TMP || tmpdir(), "tandem-other-"));
+  mkdirSync(join(other, "focus")); writeFileSync(join(other, "focus", "notes.txt"), "mine");
+  assert.equal(C.modeOn(other, {}), false);
+  assert.ok(existsSync(join(other, "focus", "notes.txt")) && !existsSync(join(other, "tandem")), "a folder that is not ours is never touched");
+});
+test("the old environment variable still works, and the new one wins", () => {
+  const d = tmp(false);
+  assert.equal(C.modeOn(d, { FOCUS_MODE: "on" }), true);
+  assert.equal(C.modeOn(d, { FOCUS_MODE: "on", TANDEM_MODE: "off" }), false);
 });
